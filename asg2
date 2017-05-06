@@ -77,12 +77,9 @@ class site(object):
 				time.sleep(5)
 				stream, addr = receiving_socket.accept()
 				self.incoming_channels[site_id_from] = stream
-
-
-
+		print("connections made")
 
 	def read_commands(self):
-		self.receive()
 		for i in self.command_file:
 			if(i.find("send") != -1): #IF SEND
 				i = i.strip("send ")
@@ -105,13 +102,13 @@ class site(object):
 
 	def send_money(self, amount, to_id):
 		self.local_bank -= amount
-		print("current local bank: " + str(self.local_bank))
+		print("sent: " + str(amount) + " local bank: " + str(self.local_bank))
 		s = self.outgoing_channels[to_id]
 		s.sendall(str(amount).encode())
 
 
 	def receive(self):
-		for i in (1, len(self.incoming_channels)-1):
+		for i in range(1, len(self.incoming_channels)-1):
 			s = self.incoming_channels[i]
 			if s == None:
 				continue
@@ -139,6 +136,14 @@ class site(object):
 		print("send marker stub!")
 
 
+	def close_connections(self):
+		for i in range(1, len(self.outgoing_channels)-1):
+			s = self.outgoing_channels[i]
+			if s!=None:
+				s.close()
+			s2 = self.incoming_channels[i]
+			if s2 != None:
+				s2.close()
 
 def main():
 	args = sys.argv
@@ -155,7 +160,7 @@ def main():
 	time.sleep(5)
 	new_site.read_commands()
 	time.sleep(8)
-	new_site.receive()
+	new_site.close_connections()
 
 if __name__ == "__main__":
     main() 
