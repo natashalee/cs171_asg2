@@ -18,8 +18,10 @@ class site(object):
 
 		self.incoming_channels = list()
 		self.outgoing_channels = list()
+		self.queue_data = list()
 		self.snapshots = list()
-
+		self.snap_count = 0
+		self.port_id_and_number = {}
 
 		self.local_bank = 10
 
@@ -35,28 +37,33 @@ class site(object):
 		receiving_socket.bind((TCP_IP, TCP_PORT_SELF))
 		receiving_socket.listen(1)
 
-		port_id_and_number = {}
+
 		self.incoming_channels.append(0) #stub, this way we can start index at 1
 		self.outgoing_channels.append(0) #stub, this way we can start index at 1
+		self.queue_data.append(0)
 
 
-		for i in range(1, total_sites+1):
+		for i in range(1, total_sites+1): 
 			port_id = int(self.setup_file[i].split(" ")[1].rstrip()) #gets all the listed port ids 
-			port_id_and_number[i] = port_id #can use dict to search for portid
+			self.port_id_and_number[i] = port_id #can use dict to search for portid
+			self.port_id_and_number[port_id] = i
 			self.incoming_channels.append(None)
 			self.outgoing_channels.append(None)
+			q = queue.Queue()
+			self.queue_data.append(q)
+
 
 
 	
-
+		#SOCKET WORK, CONNECT ALL SOCKETS
 		for i in range(total_sites+1, len(self.setup_file)):
 			links = self.setup_file[i].rstrip().split(" ")
 
-			site_id_from = int(links[0]) 					#ex: 1, 2
-			site_id_to = int(links[1]) 						#ex: 1, 2
+			site_id_from = int(links[0]) 					#ex: 1, 2..
+			site_id_to = int(links[1]) 						#ex: 1, 2..
 
-			from_port = port_id_and_number[site_id_from] 	#ex: 5001, 5002
-			to_port = port_id_and_number[site_id_to] 		#ex: 5001, 5002
+			from_port = self.port_id_and_number[site_id_from] 	#ex: 5001, 5002,...
+			to_port = self.port_id_and_number[site_id_to] 		#ex: 5001, 5002,...
 
 			if(from_port == self.site_id):
 				time.sleep(5)
@@ -74,7 +81,43 @@ class site(object):
 
 
 
+	def read_commands(self):
+		for i in self.command_file:
+			if(i.find("send") != -1): #IF SEND
+				i = i.strip("send ")
+				site_id_to = int(i[0])	#ex: 1, 2,... 
 
+				amount = int(i[2]) 		#money amount sending
+				self.send_money(amount, site_id_to)
+
+			elif(i.find("sleep") != -1): #IF SLEEP
+				time.sleep(int(i.strip("sleep ")))
+
+			elif(i.find("snapshot") != -1): #IF SNAPSHOT
+				self.take_snapshot()
+
+
+
+
+	def send_money(self, amount, to_id):
+		self.local_bank -= amount
+		print("current local bank: " + str(self.local_bank))
+		s = self.outgoing_channels[to_id]
+		s.sendall(str(amount).encode())
+
+
+	def receive(self):
+		for i in (1,self.incoming_channels):
+			s = self.incoming_channels[i]
+			if s == None:
+				continue
+			data = s.recv(1024).decode()
+			self.queue_data[i].put(data)
+
+	def take_snapshot(self):
+		self.snap_count+=1
+		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": " + str(self.local_bank)
+		self.snapshots.append(curr_snap_id)
 
 
 def main():
@@ -89,6 +132,8 @@ def main():
 	command_file = open(args[3], 'r')
 	new_site = site(site_id, setup_file.readlines(), command_file.readlines())
 	new_site.open_connections()
+	time.sleep(5)
+	new_site.read_commands()
 
 if __name__ == "__main__":
     main() 
