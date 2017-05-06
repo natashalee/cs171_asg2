@@ -93,7 +93,6 @@ class site(object):
 				self.receive()
 
 			elif(i.find("sleep") != -1): #IF SLEEP
-				print(int(i.strip("sleep ")))
 				time.sleep(int(i.strip("sleep ")))
 
 
