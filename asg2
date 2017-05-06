@@ -5,6 +5,7 @@ import time
 import socket
 import threading
 import math
+import select
 
 
 class site(object):
@@ -79,6 +80,8 @@ class site(object):
 				self.incoming_channels[site_id_from] = stream
 		print("connections made")
 
+
+
 	def read_commands(self):
 		for i in self.command_file:
 			if(i.find("send") != -1): #IF SEND
@@ -90,12 +93,13 @@ class site(object):
 				self.receive()
 
 			elif(i.find("sleep") != -1): #IF SLEEP
+				print(int(i.strip("sleep ")))
 				time.sleep(int(i.strip("sleep ")))
-				self.receive()
+
 
 			elif(i.find("snapshot") != -1): #IF SNAPSHOT
 				self.take_snapshot()
-				self.receive()
+
 
 
 
@@ -108,38 +112,39 @@ class site(object):
 
 
 	def receive(self):
-		for i in range(1, len(self.incoming_channels)-1):
+		for i in range(1, len(self.incoming_channels)):
 			s = self.incoming_channels[i]
-			if s == None:
-				continue
-			data = s.recv(1024).decode()
-			if not data:
-				continue
-			self.queue_data[i].put(data)
-			if(self.queue_data[i].empty() == False):
-				current = self.queue_data[i].get()
-				if(str(current).find("marker") != -1): #if marker
-					print("marker received")
-				else:
-					self.local_bank += int(current)
-					print("received:" + str(current) + " local bank: " + str(self.local_bank))
+			
+			if s != None:
+				data = s.recv(1024).decode()
+				if data:
+					self.queue_data[i].put(data)
+					current = self.queue_data[i].get()
+					if(str(current).find("marker") != -1): #if marker
+						print("marker received")
+					else:
+						self.local_bank += int(current)
+						print("received:" + str(current) + " local bank: " + str(self.local_bank))
+
+		return
 
 	def take_snapshot(self):
 		self.snap_count+=1
 		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": " + str(self.local_bank)
 		self.snapshots.append(curr_snap_id)
 		self.send_marker()
-
+		return
 
 
 	def send_marker(self):
 		print("send marker stub!")
+		return
 
 
 	def close_connections(self):
-		for i in range(1, len(self.outgoing_channels)-1):
+		for i in range(1, len(self.outgoing_channels)):
 			s = self.outgoing_channels[i]
-			if s!=None:
+			if s != None:
 				s.close()
 			s2 = self.incoming_channels[i]
 			if s2 != None:
@@ -148,7 +153,7 @@ class site(object):
 def main():
 	args = sys.argv
 	if (len(args)!=4):
-		print("You do not have the right number of arguments")
+		print("Usage: <port_id> <setup file> <command file> ")
 		print(args)
 		return
 
@@ -159,7 +164,7 @@ def main():
 	new_site.open_connections()
 	time.sleep(5)
 	new_site.read_commands()
-	time.sleep(8)
+	time.sleep(5)
 	new_site.close_connections()
 
 if __name__ == "__main__":
