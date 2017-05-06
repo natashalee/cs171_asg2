@@ -107,7 +107,7 @@ class site(object):
 		self.local_bank -= amount
 		print("sent: " + str(amount) + " local bank: " + str(self.local_bank))
 		s = self.outgoing_channels[to_id]
-		s.sendall(str(amount).encode())
+		s.sendall((str(amount) + "%").encode())
 
 
 	def receive(self):
@@ -115,29 +115,48 @@ class site(object):
 			s = self.incoming_channels[i]
 			
 			if s != None:
-				data = s.recv(1024).decode()
-				if data:
-					self.queue_data[i].put(data)
-					current = self.queue_data[i].get()
-					if(str(current).find("marker") != -1): #if marker
-						print("marker received")
-					else:
-						self.local_bank += int(current)
-						print("received:" + str(current) + " local bank: " + str(self.local_bank))
+				s.settimeout(10)
+				try:
+					data = s.recv(1024).decode()
+
+					if data: #3%marker == ['3', 'marker']
+						
+
+						current_data = data.split("%")
+
+						for j in current_data:
+							if (j!=''):
+								self.queue_data[i].put(j)
+						#self.queue_data[i].put(data)
+
+						while(self.queue_data[i].empty() == False):
+							current = self.queue_data[i].get()
+							if(str(current).find("marker") != -1): #if marker
+								print(current)
+
+							elif(current != ''):
+								self.local_bank += int(current)
+								print("received:" + str(current) + " local bank: " + str(self.local_bank))
+				except socket.timeout:
+					continue
 
 		return
 
 	def take_snapshot(self):
 		self.snap_count+=1
-		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": " + str(self.local_bank)
+		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": "
 		self.snapshots.append(curr_snap_id)
 		self.send_marker()
 		return
 
 
 	def send_marker(self):
-		print("send marker stub!")
-		return
+		for i in range(1, len(self.outgoing_channels)):
+			s = self.outgoing_channels[i]
+			if s != None:
+				s.sendall(("marker from: " + str(self.snapshots[0])).encode())
+				print("markers sent to: " + str(i))
+
 
 
 	def close_connections(self):
@@ -164,6 +183,7 @@ def main():
 	time.sleep(5)
 	new_site.read_commands()
 	time.sleep(5)
+	new_site.receive()
 	new_site.close_connections()
 
 if __name__ == "__main__":
