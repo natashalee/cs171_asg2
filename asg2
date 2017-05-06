@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+import sys
+import queue
+import time
+import socket
+import threading
+import math
+
+
+class site(object):
+	def __init__(self, site_id, setup_file, command_file):
+		super(site, self).__init__()
+
+		self.site_id = int(site_id)
+		self.setup_file = setup_file
+		self.command_file = command_file
+
+
+		self.incoming_channels = list()
+		self.outgoing_channels = list()
+		self.snapshots = list()
+
+
+		self.local_bank = 10
+
+
+
+	def open_connections(self):
+		total_sites = int(self.setup_file[0])
+		TCP_IP = "127.0.0.1"
+		TCP_PORT_SELF = self.site_id
+
+		receiving_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		receiving_socket.bind((TCP_IP, TCP_PORT_SELF))
+		receiving_socket.listen(1)
+
+		port_id_and_number = {}
+		self.incoming_channels.append(0) #stub, this way we can start index at 1
+		self.outgoing_channels.append(0) #stub, this way we can start index at 1
+
+
+		for i in range(1, total_sites+1):
+			port_id = int(self.setup_file[i].split(" ")[1].rstrip()) #gets all the listed port ids 
+			port_id_and_number[i] = port_id #can use dict to search for portid
+			self.incoming_channels.append(None)
+			self.outgoing_channels.append(None)
+
+
+	
+
+		for i in range(total_sites+1, len(self.setup_file)):
+			links = self.setup_file[i].rstrip().split(" ")
+
+			site_id_from = int(links[0]) 					#ex: 1, 2
+			site_id_to = int(links[1]) 						#ex: 1, 2
+
+			from_port = port_id_and_number[site_id_from] 	#ex: 5001, 5002
+			to_port = port_id_and_number[site_id_to] 		#ex: 5001, 5002
+
+			if(from_port == self.site_id):
+				time.sleep(5)
+				dest_addr = (TCP_IP, site_id_to)
+
+				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				s.connect(dest_addr)
+				self.outgoing_channels[site_id_to] = s
+			
+			elif(to_port == self.site_id):
+				time.sleep(5)
+				conn, addr = receiving_socket.accept()
+				print(addr)
+
+
+
+
+
+
+def main():
+	args = sys.argv
+	if (len(args)!=4):
+		print("You do not have the right number of arguments")
+		print(args)
+		return
+
+	site_id = args[1]
+	setup_file= open(args[2], 'r')
+	command_file = open(args[3], 'r')
+	new_site = site(site_id, setup_file.readlines(), command_file.readlines())
+	new_site.open_connections()
+
+if __name__ == "__main__":
+    main() 
+
+
+
+
