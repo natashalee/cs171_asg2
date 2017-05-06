@@ -82,6 +82,7 @@ class site(object):
 
 
 	def read_commands(self):
+		self.receive()
 		for i in self.command_file:
 			if(i.find("send") != -1): #IF SEND
 				i = i.strip("send ")
@@ -89,12 +90,15 @@ class site(object):
 
 				amount = int(i[2]) 		#money amount sending
 				self.send_money(amount, site_id_to)
+				self.receive()
 
 			elif(i.find("sleep") != -1): #IF SLEEP
 				time.sleep(int(i.strip("sleep ")))
+				self.receive()
 
 			elif(i.find("snapshot") != -1): #IF SNAPSHOT
 				self.take_snapshot()
+				self.receive()
 
 
 
@@ -107,17 +111,33 @@ class site(object):
 
 
 	def receive(self):
-		for i in (1,self.incoming_channels):
+		for i in (1, len(self.incoming_channels)-1):
 			s = self.incoming_channels[i]
 			if s == None:
 				continue
 			data = s.recv(1024).decode()
+			if not data:
+				continue
 			self.queue_data[i].put(data)
+			if(self.queue_data[i].empty() == False):
+				current = self.queue_data[i].get()
+				if(str(current).find("marker") != -1): #if marker
+					print("marker received")
+				else:
+					self.local_bank += int(current)
+					print("received:" + str(current) + " local bank: " + str(self.local_bank))
 
 	def take_snapshot(self):
 		self.snap_count+=1
 		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": " + str(self.local_bank)
 		self.snapshots.append(curr_snap_id)
+		self.send_marker()
+
+
+
+	def send_marker(self):
+		print("send marker stub!")
+
 
 
 def main():
@@ -134,6 +154,8 @@ def main():
 	new_site.open_connections()
 	time.sleep(5)
 	new_site.read_commands()
+	time.sleep(8)
+	new_site.receive()
 
 if __name__ == "__main__":
     main() 
