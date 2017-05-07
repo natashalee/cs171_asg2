@@ -44,8 +44,8 @@ class site(object):
 		self.queue_data.append(0)
 
 
-		for i in range(1, total_sites+1): 
-			port_id = int(self.setup_file[i].split(" ")[1].rstrip()) #gets all the listed port ids 
+		for i in range(1, total_sites+1):
+			port_id = int(self.setup_file[i].split(" ")[1].rstrip()) #gets all the listed port ids
 			self.port_id_and_number[i] = port_id #can use dict to search for portid
 			self.port_id_and_number[port_id] = i
 			self.incoming_channels.append(None)
@@ -55,7 +55,7 @@ class site(object):
 
 
 
-	
+
 		#SOCKET WORK, CONNECT ALL SOCKETS
 		for i in range(total_sites+1, len(self.setup_file)):
 			links = self.setup_file[i].rstrip().split(" ")
@@ -73,7 +73,7 @@ class site(object):
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				s.connect(dest_addr)
 				self.outgoing_channels[site_id_to] = s
-			
+
 			elif(to_port == self.site_id):
 				time.sleep(5)
 				stream, addr = receiving_socket.accept()
@@ -86,7 +86,7 @@ class site(object):
 		for i in self.command_file:
 			if(i.find("send") != -1): #IF SEND
 				i = i.strip("send ")
-				site_id_to = int(i[0])	#ex: 1, 2,... 
+				site_id_to = int(i[0])	#ex: 1, 2,...
 
 				amount = int(i[2]) 		#money amount sending
 				self.send_money(amount, site_id_to)
@@ -100,9 +100,6 @@ class site(object):
 				self.take_snapshot()
 
 
-
-
-
 	def send_money(self, amount, to_id):
 		self.local_bank -= amount
 		print("sent: " + str(amount) + " local bank: " + str(self.local_bank))
@@ -112,15 +109,18 @@ class site(object):
 
 	def receive(self):
 		for i in range(1, len(self.incoming_channels)):
+			print( "receive(self) in loop " + str(i))
 			s = self.incoming_channels[i]
-			
+
 			if s != None:
 				data = s.recv(1024).decode()
 				if data:
+					print("ADDING " + data + " TO QUEUE")
 					self.queue_data[i].put(data)
 					current = self.queue_data[i].get()
+					print("CURRENT = " + str(current))
 					if(str(current).find("marker") != -1): #if marker
-						print("marker received")
+						print(current + " received from channel " + str(i))
 					else:
 						self.local_bank += int(current)
 						print("received:" + str(current) + " local bank: " + str(self.local_bank))
@@ -136,7 +136,12 @@ class site(object):
 
 
 	def send_marker(self):
-		print("send marker stub!")
+		for i in range(1, len(self.outgoing_channels)):
+			if not self.outgoing_channels[i]:
+				continue
+			else:
+				self.outgoing_channels[i].sendall( "marker".encode() )
+				print("sent marker to channel " + str(i))
 		return
 
 
@@ -152,7 +157,7 @@ class site(object):
 def main():
 	args = sys.argv
 	if (len(args)!=4):
-		print("Usage: <port_id> <setup file> <command file> ")
+		print("Usage: <port> <setup file> <command file> ")
 		print(args)
 		return
 
@@ -167,8 +172,4 @@ def main():
 	new_site.close_connections()
 
 if __name__ == "__main__":
-    main() 
-
-
-
-
+    main()
