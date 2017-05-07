@@ -19,7 +19,7 @@ class site(object):
 		self.incoming_channels = list()
 		self.outgoing_channels = list()
 		self.queue_data = list()
-		self.snapshots = list()
+		self.snapshots_list = list()
 		self.snap_count = 0
 		self.total_sites = 0
 		self.port_id_and_number = {}
@@ -99,6 +99,8 @@ class site(object):
 				site_num = self.port_id_and_number[self.site_id]
 				snap_name = str(site_num) + "." + str(self.snap_count)
 				new_snapshot = snapshot(self.total_sites, snap_name, self.local_bank)
+				self.snapshots_list.append(new_snapshot)
+				self.send_markers()
 				#create snapshot pass in a lot of stuff including snap name
 
 
@@ -139,19 +141,15 @@ class site(object):
 
 		return
 
-	def take_snapshot(self):
-		self.snap_count+=1
-		curr_snap_id = str(self.port_id_and_number[self.site_id]) + "." + str(self.snap_count) + ": "
-		self.snapshots.append(curr_snap_id)
-		self.send_marker()
-		return
 
 
-	def send_marker(self):
+
+	def send_markers(self):
 		for i in range(1, len(self.outgoing_channels)):
 			s = self.outgoing_channels[i]
 			if s != None:
-				s.sendall(("marker from: " + str(self.snapshots[0])).encode())
+				snap_name = str(self.snapshots_list[0].get_snap_name()) #hardcoded for now
+				s.sendall(("marker from: " + str(snap_name)).encode())
 				print("markers sent to: " + str(i))
 
 
@@ -182,10 +180,12 @@ class snapshot(object):
 			self.closeds.append(None)
 			self.amounts.append(None)
 
-	def add_to_channel( channel_num, amount ):
+	def add_to_channel(self, channel_num, amount ):
 		if self.closeds[ channel_num ] == True:
 			self.amounts[ channel_num ] += amount
 
+	def get_snap_name(self):
+		return self.snap_name
 
 	def print_snapshot(self):
 		print( snap_name + ": " + self.my_snap_bank + " ")
