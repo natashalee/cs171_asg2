@@ -182,8 +182,8 @@ class snapshot(object):
 			self.amounts.append(None)
 
 	def add_to_channel( channel_num, amount ):
-		if self.closeds[ channel_num ] == True
-		self.amounts[ channel_num ] += amount
+		if self.closeds[ channel_num ] == True:
+			self.amounts[ channel_num ] += amount
 
 
 	def print_snapshot(self):
