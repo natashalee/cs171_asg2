@@ -19,7 +19,8 @@ class site(object):
 		self.incoming_channels = list()
 		self.outgoing_channels = list()
 		self.queue_data = list()
-		self.snapshots_list = list()
+		# self.snapshots_list = list()
+		self.snapshots_dict = {}
 
 		self.marker_count = 0
 		self.global_snap_count = 0
@@ -111,8 +112,9 @@ class site(object):
 				new_snapshot = snapshot(self.total_sites, site_num, snap_name, self.local_bank)
 				self.snap_complete = False
 				print( "JUST ASSIGNED self.snap_complete = False")
-				self.snapshots_list.append(new_snapshot)
-				self.send_markers()
+				# self.snapshots_list.append(new_snapshot)
+				self.snapshots_dict[ new_snapshot.get_snap_name() ] = new_snapshot
+				self.send_markers( new_snapshot.get_snap_name() )
 				self.receive()
 				#create snapshot pass in a lot of stuff including snap name
 		#print("IM DONE")
@@ -154,27 +156,45 @@ class site(object):
 							current = self.queue_data[i].get()
 							if(str(current).find("marker") != -1): #if marker
 								self.marker_count += 1
-								print("received marker from channel " + str(i))
-								if((self.marker_count != self.total_sites - 1) and (self.snap_complete == False)):
-									#means you are the initiator and got your marker back, can set channel close now
-									self.snapshots_list[self.global_snap_count-1].close_channel(i)
-								elif(self.marker_count == self.total_sites - 1):
-									#means you are the initiator and got all markers back, can set snap complete
-									self.snapshots_list[self.global_snap_count-1].close_channel(i)
-									self.snap_complete = True
-									print( "JUST ASSIGNED self.snap_complete = True")
+								marker_snap_name = current.split(" ")[-1] # should i rename to snap_name or naw
+								print( "marker_snap_name: " + marker_snap_name )
 
-								elif(self.marker_count == 1 and self.snap_complete == True):
-									#means you are not the initiator, must take snapshot and send markers
+								if ( not self.snapshots_dict.get( marker_snap_name ) ):
+									# i am not the initiator of the snap
+									print( "received new snap_name" )
 									site_num = self.port_id_and_number[self.site_id]
-									snap_name = str(current.strip("marker from: "))
-									new_snapshot = snapshot(self.total_sites, site_num, snap_name, self.local_bank)
+									new_snapshot = snapshot(self.total_sites, site_num, marker_snap_name, self.local_bank)
 									new_snapshot.close_channel(i)
-									self.snapshots_list.append(new_snapshot)
-									self.global_snap_count +=1
-									self.send_markers()
-									self.snap_complete = False
-									print( "JUST ASSIGNED self.snap_complete = False")
+									self.snapshots_dict[ marker_snap_name ] = new_snapshot
+									self.send_markers( marker_snap_name )
+									# self.snap_complete = False
+								else:
+									print( "snap_name does exist")
+									self.snapshots_dict[ marker_snap_name ].close_channel(i)
+
+								# if((self.marker_count != self.total_sites - 1) and (self.snap_complete == False)):
+								# 	# means you are the initiator and got your marker back, can set channel close now
+								# 	# self.snapshots_list[self.global_snap_count-1].close_channel(i)
+								# 	self.snapshots_dict[ marker_snap_name ].close_channel(i)
+								# elif(self.marker_count == self.total_sites - 1):
+								# 	# means you are the initiator and got all markers back, can set snap complete
+								# 	# self.snapshots_list[self.global_snap_count-1].close_channel(i)
+								# 	self.snapshots_dict[ marker_snap_name ].close_channel(i)
+								# 	self.snap_complete = True
+								# 	print( "JUST ASSIGNED self.snap_complete = True")
+								#
+								# elif(self.marker_count == 1 and self.snap_complete == True):
+								# 	# means you are not the initiator, must take snapshot and send markers
+								# 	site_num = self.port_id_and_number[self.site_id]
+								# 	snap_name = str(current.strip("marker from: "))
+								# 	new_snapshot = snapshot(self.total_sites, site_num, snap_name, self.local_bank)
+								# 	new_snapshot.close_channel(i)
+								# 	# self.snapshots_list.append(new_snapshot)
+								# 	self.snapshots_dict[ new_snapshot.get_snap_name() ] = new_snapshot
+								# 	self.global_snap_count +=1
+								# 	self.send_markers( new_snapshot.get_snap_name() )
+								# 	self.snap_complete = False
+								# 	print( "JUST ASSIGNED self.snap_complete = False")
 
 							elif(str(current).find("DONE") != -1): # if i receive a done message
 								self.sites_done += 1 # increment my knowledge of sites_done
@@ -183,8 +203,13 @@ class site(object):
 									#print("everyone else is DONE")
 									return
 
-							elif(not self.snap_complete and current != ''):
-								self.snapshots_list[self.global_snap_count-1].add_to_channel(i, int(current))
+							elif(not self.snap_complete and current != ''): # here we are receiving money and must log it to WHICH SNAPSHOT IDK
+								# loop through all incomplete snapshots and add it to all of them????
+								# self.snapshots_list[self.global_snap_count-1].add_to_channel(i, int(current))
+								for k in self.snapshots_dict:
+									# print("K IS " + k)
+									if ( not self.snapshots_dict[k].is_complete() ):
+										self.snapshots_dict[k].add_to_channel(i, int(current))
 								self.local_bank += int(current)
 								#print("received:" + str(current) + " local bank: " + str(self.local_bank))
 
@@ -198,13 +223,12 @@ class site(object):
 		return
 
 
-	def send_markers(self):
+	def send_markers(self, snap_name):
 		print("======================= begin send_markers()")
 		for i in range(1, len(self.outgoing_channels)):
 			s = self.outgoing_channels[i]
 			if s != None:
-				snap_name = str(self.snapshots_list[self.global_snap_count-1].get_snap_name())
-				s.sendall(("marker from: " + str(snap_name) +"%").encode())
+				s.sendall(("marker from: " + str(snap_name) +"%").encode()) # keep this send message the same
 				print("marker sent to: " + str(i))
 		print("======================= end send_markers()")
 
@@ -220,8 +244,8 @@ class site(object):
 				s2.close()
 
 	def output(self):
-		for i in self.snapshots_list:
-			i.print_snapshot()
+		for i in self.snapshots_dict:
+			self.snapshots_dict[i].print_snapshot()
 
 class snapshot(object):
 	def __init__(self, total_sites, my_channel_id, snap_name, my_snap_bank ):
@@ -298,4 +322,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
