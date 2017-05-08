@@ -1,2 +1,2 @@
-send 2 9
 sleep 5
+send 2 5
