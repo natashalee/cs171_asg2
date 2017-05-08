@@ -12,15 +12,15 @@ class site(object):
 	def __init__(self, site_num, setup_file, command_file):
 		super(site, self).__init__()
 
-		self.site_num = int(site_num)
-
+		self.site_num = int(site_num) #ex: 1, 2, 3,...
+		self.site_id = 0			#ex: 5001, 5002,...
 		self.setup_file = setup_file
 		self.command_file = command_file
 
 		self.incoming_channels = list()
 		self.outgoing_channels = list()
 		self.queue_data = list()
-		# self.snapshots_list = list()
+
 		self.snapshots_dict = {}
 
 		self.marker_count = 0
@@ -29,17 +29,15 @@ class site(object):
 		self.total_sites = 0
 		self.sites_done = 0 # if this becomes total_sites-1 then I can be
 
-		self.site_id = 0
+		
 
 
 		self.port_id_and_number = {}
 
-		self.snap_complete = True
-
 		self.local_bank = 10
 
-		self.incoming_channels.append(0) #stub, this way we can start index at 1
-		self.outgoing_channels.append(0) #stub, this way we can start index at 1
+		self.incoming_channels.append(0) #this way we can start index at 1
+		self.outgoing_channels.append(0) #this way we can start index at 1
 		self.queue_data.append(0)
 
 
@@ -48,7 +46,8 @@ class site(object):
 
 	def open_connections(self):
 		self.total_sites = int(self.setup_file[0])
-		TCP_IP = "127.0.0.1"
+		TCP_IP = str(self.setup_file[self.site_num].split(" ")[0].rstrip())
+
 		
 		for i in range(1, self.total_sites+1):
 			port_id = int(self.setup_file[i].split(" ")[1].rstrip()) #gets all the listed port ids
@@ -84,7 +83,6 @@ class site(object):
 
 
 			if(from_port == self.site_id):
-				print("from == self " + str(from_port))
 				time.sleep(5)
 				dest_addr = (TCP_IP, to_port)
 
@@ -96,58 +94,47 @@ class site(object):
 				time.sleep(5)
 				stream, addr = receiving_socket.accept()
 				self.incoming_channels[site_id_from] = stream
-		print("connections made")
+
 
 
 
 	def read_commands(self):
-		print("========================= begin read_commands()")
+
 		for i in self.command_file:
 			if(i.find("send") != -1): #IF SEND
 				i = i.strip("send ")
 				site_id_to = int(i[0])	#ex: 1, 2,...
 
 				amount = int(i[2]) 		#money amount sending
-				print("sending to " + str(site_id_to))
 				self.send_money(amount, site_id_to)
+				self.receive()
 
 			elif(i.find("sleep") != -1): #IF SLEEP
 				time.sleep(int(i.strip("sleep ")))
 				self.receive()
 
 			elif(i.find("snapshot") != -1): #IF SNAPSHOT
-				print("I HAVE JUST READ A SNAPSHOT")
 				self.my_snap_count +=1
 				self.global_snap_count += 1
 				site_num = self.port_id_and_number[self.site_id]
 				snap_name = str(site_num) + "." + str(self.my_snap_count)
 				new_snapshot = snapshot(self.total_sites, site_num, snap_name, self.local_bank, self.incoming_channels)
-				self.snap_complete = False
-				print( "JUST ASSIGNED self.snap_complete = False")
-				# self.snapshots_list.append(new_snapshot)
+				
 				self.snapshots_dict[ new_snapshot.get_snap_name() ] = new_snapshot
 				self.send_markers( new_snapshot.get_snap_name() )
 				self.receive()
-				#create snapshot pass in a lot of stuff including snap name
-		#print("IM DONE")
-		# for i in range(1, self.total_sites):
-		# 	if( i != self.site_id and self.outgoing_channels[i] != None ):
-		# 		s = self.outgoing_channels[i]
-		# 		s.sendall( ("DONE").encode() )
-				#print( "sent DONE message to site " + str(i) )
-		print("=========================== end read_commands()")
+
+		
+
 
 
 	def send_money(self, amount, to_id):
 		self.local_bank -= amount
-		#print("sent: " + str(amount) + " local bank: " + str(self.local_bank))
 		s = self.outgoing_channels[to_id]
 		s.sendall((str(amount) + "%").encode())
 
 
 	def receive(self):
-		print("=============================== begin receive()")
-		print("self.snap_complete = " + str(self.snap_complete))
 		for i in range(1, len(self.incoming_channels)):
 			s = self.incoming_channels[i]
 
@@ -155,88 +142,56 @@ class site(object):
 				s.settimeout(15)
 				try:
 					data = s.recv(1024).decode()
-					if data: #3%marker == ['3', 'marker']
+					if data: 
 
 						current_data = data.split("%")
 
 						for j in current_data:
 							if (j!=''):
 								self.queue_data[i].put(j)
-						#self.queue_data[i].put(data)
+						
 
 						while(self.queue_data[i].empty() == False):
 							current = self.queue_data[i].get()
 							if(str(current).find("marker") != -1): #if marker
 								self.marker_count += 1
-								marker_snap_name = current.split(" ")[-1] # should i rename to snap_name or naw
-								print( "marker_snap_name: " + marker_snap_name )
+								marker_snap_name = current.split(" ")[-1] 
 
 								if ( not self.snapshots_dict.get( marker_snap_name ) ):
-									# i am not the initiator of the snap
-									print( "received new snap_name" )
+									# received new snap name
 									site_num = self.port_id_and_number[self.site_id]
 									new_snapshot = snapshot(self.total_sites, site_num, marker_snap_name, self.local_bank, self.incoming_channels)
 									new_snapshot.close_channel(i)
 									self.snapshots_dict[ marker_snap_name ] = new_snapshot
 									self.send_markers( marker_snap_name )
-									# self.snap_complete = False
 								else:
-									print( "snap_name does exist")
+									#snap already exists, cloe channels 
 									self.snapshots_dict[ marker_snap_name ].close_channel(i)
 
-								# if((self.marker_count != self.total_sites - 1) and (self.snap_complete == False)):
-								# 	# means you are the initiator and got your marker back, can set channel close now
-								# 	# self.snapshots_list[self.global_snap_count-1].close_channel(i)
-								# 	self.snapshots_dict[ marker_snap_name ].close_channel(i)
-								# elif(self.marker_count == self.total_sites - 1):
-								# 	# means you are the initiator and got all markers back, can set snap complete
-								# 	# self.snapshots_list[self.global_snap_count-1].close_channel(i)
-								# 	self.snapshots_dict[ marker_snap_name ].close_channel(i)
-								# 	self.snap_complete = True
-								# 	print( "JUST ASSIGNED self.snap_complete = True")
-								#
-								# elif(self.marker_count == 1 and self.snap_complete == True):
-								# 	# means you are not the initiator, must take snapshot and send markers
-								# 	site_num = self.port_id_and_number[self.site_id]
-								# 	snap_name = str(current.strip("marker from: "))
-								# 	new_snapshot = snapshot(self.total_sites, site_num, snap_name, self.local_bank)
-								# 	new_snapshot.close_channel(i)
-								# 	# self.snapshots_list.append(new_snapshot)
-								# 	self.snapshots_dict[ new_snapshot.get_snap_name() ] = new_snapshot
-								# 	self.global_snap_count +=1
-								# 	self.send_markers( new_snapshot.get_snap_name() )
-								# 	self.snap_complete = False
-								# 	print( "JUST ASSIGNED self.snap_complete = False")
 
-
-							elif(not self.snap_complete and current != ''): # here we are receiving money and must log it to WHICH SNAPSHOT IDK
+							elif(current != ''):
 								# loop through all incomplete snapshots and add it to all of them????
 								# self.snapshots_list[self.global_snap_count-1].add_to_channel(i, int(current))
 								for k in self.snapshots_dict:
-									# print("K IS " + k)
 									if ( not self.snapshots_dict[k].is_complete() ):
 										self.snapshots_dict[k].add_to_channel(i, int(current))
 								self.local_bank += int(current)
-								#print("received:" + str(current) + " local bank: " + str(self.local_bank))
 
-							elif(self.snap_complete and current != ''):
-								self.local_bank += int(current)
-								#print("received:" + str(current) + " local bank: " + str(self.local_bank))
+						
+
 
 				except socket.timeout:
 					continue
-		print("=============================== end receive()")
 		return
 
 
 	def send_markers(self, snap_name):
-		print("======================= begin send_markers()")
 		for i in range(1, len(self.outgoing_channels)):
 			s = self.outgoing_channels[i]
 			if s != None:
 				s.sendall(("marker from: " + str(snap_name) +"%").encode()) # keep this send message the same
-				print("marker sent to: " + str(i))
-		print("======================= end send_markers()")
+
+
 
 
 
@@ -275,7 +230,7 @@ class snapshot(object):
 			else:
 				self.closeds.append(False)
 				self.amounts.append(0)
-		print("INSTANTIATED SNAPSHOT")
+
 
 	def add_to_channel(self, channel_num, amount ):
 		if self.closeds[ channel_num ] == False:
@@ -302,9 +257,6 @@ class snapshot(object):
 
 		print(output)
 
-	def check(self):
-		print(str(self.closeds))
-		print(str(self.amounts))
 
 
 
