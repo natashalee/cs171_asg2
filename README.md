@@ -2,6 +2,4 @@
 # cs171_asg2
 
 
-./runasg2.sh
-
-or ./asg2 <site_id> <setup_file> <command_file>
+./asg2 <site_id> <setup_file> <command_file>
