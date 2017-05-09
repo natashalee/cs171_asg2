@@ -4,4 +4,4 @@
 
 ./runasg2.sh
 
-or ./asg2 <site_id> <setup file> <command file>
+or ./asg2 <site_id> <setup_file> <command_file>
